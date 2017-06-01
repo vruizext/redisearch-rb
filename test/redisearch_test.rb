@@ -4,8 +4,8 @@ class RediSearchTest < Minitest::Test
   REDIS_URL = 'redis://127.0.0.1:6379'
 
   def setup
-    #@redis_server = RedisTestServer.new
-    # fail('error starting redis-server') unless @redis_server.start
+    @redis_server = RedisTestServer.new
+    fail('error starting redis-server') unless @redis_server.start
     sleep(0.25)
     @redis_client = Redis.new(url: REDIS_URL)
     @redis_client.flushdb
@@ -17,7 +17,7 @@ class RediSearchTest < Minitest::Test
   end
 
   def teardown
-    #@redis_server&.stop
+    @redis_server&.stop
   end
 
   def test_that_it_has_a_version_number

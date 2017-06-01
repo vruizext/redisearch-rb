@@ -1,2 +1,2 @@
-require './lib/redisearch'
-require './lib/redisearch/version'
+require 'redisearch'
+require 'redisearch/version'
