@@ -1,9 +1,8 @@
 # coding: utf-8
-require File.expand_path('../lib/redisearch/version', __FILE__)
 
 Gem::Specification.new do |spec|
   spec.name          = "redisearch-rb"
-  spec.version       =  RediSearch::VERSION
+  spec.version       =  '0.0.1'
   spec.authors       = ["Victor Ruiz"]
   spec.email         = ["vruizext@gmail.com"]
 
