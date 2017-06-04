@@ -1,13 +1,11 @@
 require 'test_helper'
 
 class RediSearchTest < Minitest::Test
-  REDIS_URL = 'redis://127.0.0.1:6379'
-
   def setup
     @redis_server = RedisTestServer.new
     fail('error starting redis-server') unless @redis_server.start
     sleep(0.25)
-    @redis_client = Redis.new(url: REDIS_URL)
+    @redis_client = Redis.new(url: ENV['REDIS_URL'])
     @redis_client.flushdb
     @redisearch_client = RediSearch.new('test_idx', @redis_client)
     @schema = ['title', 'TEXT', 'WEIGHT', '2.0',

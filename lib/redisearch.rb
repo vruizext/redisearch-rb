@@ -78,16 +78,23 @@ class RediSearch
 
   # Search the index with the given `query`
   # @param [String] query text query, see syntax here http://redisearch.io/Query_Syntax/
-  # @param [Hash] opts
-  # @option opts [Boolean] :nostopwords If `true` do not filter stopwords from the query.
+  # @param [Hash] opts options for the query
   #
-  #
+  #@return [Array] documents matching the query
   def search(query, opts = {})
     results_to_hash(call(ft_search(query, opts)))
   end
 
+  # Return information and statistics on the index.
+  # @return [Hash] info returned by Redis key-value pairs
+  #
   def info
-    call(ft_info)
+    result = call(ft_info)
+    return unless result.size > 0
+    nr_of_rows = result.size / 2
+    (0..nr_of_rows-1).map do |n|
+
+    end
   end
 
   private
