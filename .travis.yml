@@ -1,0 +1,16 @@
+sudo: false
+language: ruby
+rvm:
+  - 2.4.0
+before_install:
+- gem install bundler -v 1.14.6
+- git clone --depth 1 https://github.com/antirez/redis.git
+- cd redis
+- make
+- cd ..
+- git clone --depth 1 https://github.com/RedisLabsModules/RediSearch.git
+- cd RediSearch/src
+- make all
+- cd ..
+env:
+- REDIS_PORT=6379 REDIS_TEST_URL=redis://127.0.0.1:6379 REDIS_SERVER_PATH=$TRAVIS_BUILD_DIR/redis/src/redis-server REDIS_MODULE_PATH=$TRAVIS_BUILD_DIR/RediSearch/src/module.so
