@@ -5,7 +5,7 @@ require 'minitest/autorun'
 require 'subprocess'
 require 'dotenv'
 
-require './lib/redisearch'
+require './lib/redisearch-rb'
 
 Dotenv.load('./.env')
 
@@ -21,14 +21,13 @@ class RedisTestServer
   def start
     build_args
     @process = Subprocess.popen(@command)
-    sleep(0.25)
   rescue => error
     Logger.new(STDERR).error(error.message)
     @process = nil
   end
 
   def stop
-    @process.terminate
+    @process&.terminate
   rescue => error
     Logger.new(STDERR).error(error.message)
   end

@@ -16,6 +16,7 @@ class RediSearchTest < Minitest::Test
 
   def teardown
     @redis_server&.stop
+    sleep(0.25)
   end
 
   def test_that_it_has_a_version_number

@@ -12,5 +12,3 @@ before_install:
 - cd RediSearch/src
 - make all
 - cd ..
-env:
-- REDIS_PORT=6379 REDIS_TEST_URL=redis://127.0.0.1:6379 REDIS_SERVER_PATH=$TRAVIS_BUILD_DIR/redis/src/redis-server REDIS_MODULE_PATH=$TRAVIS_BUILD_DIR/RediSearch/src/module.so
