@@ -1,3 +1,5 @@
+[![Gem Version](https://badge.fury.io/rb/redisearch-rb.svg)](https://badge.fury.io/rb/redisearch-rb) ![travis-ci](https://travis-ci.org/vruizext/redisearch-rb.svg?branch=master)
+
 # redisearch-rb
 
 A simple Ruby client for RediSearch module
