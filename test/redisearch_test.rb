@@ -79,4 +79,15 @@ class RediSearchTest < Minitest::Test
     assert_empty @redisearch_client.search('@director:lost')
     assert_equal 1, @redisearch_client.search('@year:[2004 2005]').count
   end
+
+  def test_index_info
+    assert(@redisearch_client.create_index(@schema))
+    doc = ['id_1', ['title', 'Lost in translation', 'director', 'Sofia Coppola', 'year', '2004']]
+    assert(@redisearch_client.add_doc(*doc))
+    info = @redisearch_client.info
+    assert info.any?
+    assert_equal 1, info['num_docs'].to_i
+    assert_equal 1, info['max_doc_id'].to_i
+    assert_equal 5, info['num_terms'].to_i
+  end
 end

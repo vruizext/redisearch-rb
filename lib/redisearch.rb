@@ -5,8 +5,6 @@ require 'redis'
 # http://redisearch.io/
 #
 class RediSearch
-  # VERSION = '0.1.0'
-
   # Create RediSearch client instance
   #
   # @param [String] idx_name name of the index
@@ -89,12 +87,7 @@ class RediSearch
   # @return [Hash] info returned by Redis key-value pairs
   #
   def info
-    result = call(ft_info)
-    return unless result.size > 0
-    nr_of_rows = result.size / 2
-    (0..nr_of_rows-1).map do |n|
-
-    end
+    Hash[*call(ft_info)]
   end
 
   private
@@ -133,12 +126,12 @@ class RediSearch
     command << 'VERBATIM' if opts[:verbatim]
     if opts[:offset] || opts[:limit]
       limit = opts[:limit].to_i > 0 ? opts[:limit].to_i : -1
-      command << "LIMIT #{opts[:offset].to_i} #{limit}"
+      command << ["LIMIT", opts[:offset], limit]
     end
     command << 'WITHSCORES' if opts[:withscores]
-    command << "SCORER #{opts[:scorer]}" unless opts[:scorer].to_s.empty?
-    command << "SLOP #{opts[:slop]}" if opts[:slop].to_i > 0
-    command
+    command << ["SCORER", opts[:scorer]] unless opts[:scorer].to_s.empty?
+    command << ["SLOP", opts[:slop]] if opts[:slop].to_i > 0
+    command.flatten
   end
 
   def results_to_hash(results)
