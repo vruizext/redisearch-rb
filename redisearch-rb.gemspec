@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.email         = ["vruizext@gmail.com"]
 
   spec.summary       = "A simple Ruby client library for RediSearch"
-  spec.description   = "A simple Ruby client library for RediSearc. RediSearch is a Full-Text search index over Redis,
-                        developed by RedisLabs. http://redisearch.io/"
+  spec.description   = "A simple Ruby client library for RediSearch.
+                        RediSearch is a Redis powered search engine, developed by RedisLabs. http://redisearch.io/"
   spec.homepage      = "https://github.com/vruizext/redisearch-rb"
   spec.license       = "MIT"
 
