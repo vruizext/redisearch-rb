@@ -1,7 +1,8 @@
-sudo: false
+sudo: required
+dist: trusty
 language: ruby
 rvm:
-  - 2.4.0
+  - 2.4.1
 before_install:
 - gem install bundler -v 1.14.6
 - git clone --depth 10 https://github.com/antirez/redis.git
@@ -13,4 +14,5 @@ before_install:
 - git clone --depth 1 https://github.com/RedisLabsModules/RediSearch.git
 - cd RediSearch/src
 - make all
+- ls -la *.so
 - cd ..

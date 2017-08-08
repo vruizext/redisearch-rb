@@ -11,3 +11,4 @@
 .idea/
 *.gem
 *.rdb
+*.so
