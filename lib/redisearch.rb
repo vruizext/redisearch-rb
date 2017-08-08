@@ -5,6 +5,22 @@ require 'redis'
 # http://redisearch.io/
 #
 class RediSearch
+  DEFAULT_WEIGHT = '1.0'
+
+  # Supported options
+  # Flags options can be only true or false,
+  #
+  # { verbatim: true, withscores: true, withsortkey: false }
+
+  CREATE_OPTIONS_FLAGS = [:nooffsets, :nofreqs, :noscoreidx, :nofields]
+  ADD_OPTIONS_FLAGS = [:nosave, :replace]
+  SEARCH_OPTIONS_FLAGS = [:nocontent, :verbatim, :nostopwords,  :withscores, :withsortkeys]
+
+  # Params options need an array with the values for the option
+  #  { limit: ['0', '50'], sortby: ['year', 'desc'], return: ['2', 'title', 'year'] }
+  ADD_OPTIONS_PARAMS = [:language]
+  SEARCH_OPTIONS_PARAMS = [:filter, :return, :infields, :inkeys, :slop, :scorer, :sortby, :limit]
+
   # Create RediSearch client instance
   #
   # @param [String] idx_name name of the index
@@ -29,8 +45,8 @@ class RediSearch
   # See http://redisearch.io/Commands/#ftcreate
   #
   # @return [String] "OK" on success
-  def create_index(schema)
-    call(ft_create(schema))
+  def create_index(schema, opts = {})
+    call(ft_create(schema, opts))
   end
 
   # Drop all the keys in the current index
@@ -45,7 +61,7 @@ class RediSearch
   #
   # @param [String] doc_id id assigned to the document
   # @param [Array] fields name-value pairs to be indexed
-  #
+  # @param [Hash] opts optional parameters
   # Example:
   #
   #   redisearch = RediSearch.new('my_idx')
@@ -53,8 +69,8 @@ class RediSearch
   #
   # See http://redisearch.io/Commands/#ftadd
   # @return [String] "OK" on success
-  def add_doc(doc_id, fields)
-    call(ft_add(doc_id, fields))
+  def add_doc(doc_id, fields, opts = {})
+    call(ft_add(doc_id, fields, opts))
   end
 
   # Add a set of docs to the index. Uses redis `multi` to make a single bulk insert.
@@ -70,8 +86,8 @@ class RediSearch
   #
   # See http://redisearch.io/Commands/#ftadd
   # @return [String] "OK" on success
-  def add_docs(docs)
-    multi { docs.each { |doc_id, fields| @redis.call(ft_add(doc_id, fields)) } }
+  def add_docs(docs, opts = {})
+    multi { docs.each { |doc_id, fields| @redis.call(ft_add(doc_id, fields, opts)) } }
   end
 
   # Search the index with the given `query`
@@ -80,7 +96,7 @@ class RediSearch
   #
   #@return [Array] documents matching the query
   def search(query, opts = {})
-    results_to_hash(call(ft_search(query, opts)))
+    results_to_hash(call(ft_search(query, opts)), opts)
   end
 
   # Return information and statistics on the index.
@@ -104,8 +120,8 @@ class RediSearch
     @redis.call(ft_add(doc_id, fields))
   end
 
-  def ft_create(schema)
-    ['FT.CREATE', @idx_name , 'SCHEMA', *schema]
+  def ft_create(schema, opts)
+    ['FT.CREATE', @idx_name , *create_options(opts), 'SCHEMA', *schema]
   end
 
   def ft_drop
@@ -116,28 +132,39 @@ class RediSearch
     ['FT.INFO', @idx_name]
   end
 
-  def ft_add(doc_id, fields)
-    ['FT.ADD', @idx_name , doc_id, '1.0', 'REPLACE', 'FIELDS', *fields]
+  def ft_add(doc_id, fields, opts = {}, weight =  nil)
+    ['FT.ADD', @idx_name , doc_id, weight || DEFAULT_WEIGHT, *add_options(opts), 'FIELDS', *fields]
   end
 
   def ft_search(query, opts)
-    command = ['FT.SEARCH', @idx_name, *query]
-    command << 'NOSTOPWORDS' if opts[:nostopwords]
-    command << 'VERBATIM' if opts[:verbatim]
-    if opts[:offset] || opts[:limit]
-      limit = opts[:limit].to_i > 0 ? opts[:limit].to_i : -1
-      command << ["LIMIT", opts[:offset], limit]
-    end
-    command << 'WITHSCORES' if opts[:withscores]
-    command << ["SCORER", opts[:scorer]] unless opts[:scorer].to_s.empty?
-    command << ["SLOP", opts[:slop]] if opts[:slop].to_i > 0
-    command.flatten
+    ['FT.SEARCH', @idx_name, *query, *search_options(opts)].flatten
   end
 
-  def results_to_hash(results)
+  def create_options(opts = {})
+    build_options(opts, CREATE_OPTIONS_FLAGS, [])
+  end
+
+  def add_options(opts = {})
+    build_options(opts, ADD_OPTIONS_FLAGS, ADD_OPTIONS_PARAMS)
+  end
+
+  def search_options(opts = {})
+    build_options(opts, SEARCH_OPTIONS_FLAGS, SEARCH_OPTIONS_PARAMS)
+  end
+
+  def build_options(opts, flags_keys, params_keys)
+    flags_keys.map do |key|
+      key.to_s.upcase if opts[key]
+    end.compact +
+    params_keys.map do |key|
+      [key.to_s.upcase, *opts[key]] unless opts[key].nil?
+    end.compact
+  end
+
+  def results_to_hash(results, opts = {})
     return {} if results.nil? || results[0] == 0
     results.shift
-    offset = results.size % 3 == 0 ? 1 : 0
+    offset = opts[:withscores] ? 1 : 0
     rows_per_doc = 2 + offset
     nr_of_docs = results.size / (2 + offset)
     (0..nr_of_docs-1).map do |n|
