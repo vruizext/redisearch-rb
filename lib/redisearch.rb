@@ -99,6 +99,12 @@ class RediSearch
     results_to_hash(call(ft_search(query, opts)), opts)
   end
 
+  # Fetch a document by id
+  def get_by_id(id)
+    Hash[with_reconnect { @redis.hgetall(id) } || []]
+      .tap { |doc| doc['id'] = id unless doc.empty? }
+  end
+
   # Return information and statistics on the index.
   # @return [Hash] info returned by Redis key-value pairs
   #
@@ -107,6 +113,10 @@ class RediSearch
   end
 
   private
+
+  def with_reconnect
+    @redis.with_reconnect { yield }
+  end
 
   def multi
     @redis.with_reconnect { @redis.multi { yield } }

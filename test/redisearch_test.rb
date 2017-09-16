@@ -72,6 +72,16 @@ class RediSearchTest < Minitest::Test
     assert_includes(search_result.to_s, 'Ex Machina')
   end
 
+  def test_get_by_id
+    assert(@redisearch_client.create_index(@schema))
+    docs = [['id_1', ['title', 'Lost in translation', 'director', 'Sofia Coppola', 'year', '2004']],
+            ['id_2', ['title', 'Ex Machina', 'director', 'Alex Garland', 'year', '2014']]]
+    assert(@redisearch_client.add_docs(docs))
+    doc = @redisearch_client.get_by_id('id_1')
+    assert_equal('id_1', doc['id'])
+    assert_equal('Lost in translation', doc['title'])
+  end
+
   def test_search_simple_query
     assert(@redisearch_client.create_index(@schema))
     docs = [['id_1', ['title', 'Lost in translation', 'director', 'Sofia Coppola', 'year', '2004']],
