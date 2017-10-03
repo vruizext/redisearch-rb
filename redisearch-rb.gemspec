@@ -12,7 +12,7 @@ Gem::Specification.new do |spec|
                         RediSearch is a Redis powered search engine, developed by RedisLabs. http://redisearch.io/"
   spec.homepage      = "https://github.com/vruizext/redisearch-rb"
   spec.license       = "MIT"
-
+  spec.required_ruby_version = '> 2.4.0'
   spec.files         = `git ls-files`.split("\n")
   spec.test_files    = `git ls-files -- {test}/*`.split("\n")
 end
