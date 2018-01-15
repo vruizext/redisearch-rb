@@ -7,12 +7,14 @@ before_install:
 - gem install bundler -v 1.14.6
 - git clone --depth 10 https://github.com/antirez/redis.git
 - cd redis
-- git fetch origin 4.0.1
-- git checkout ae43e164d4b09d7753e27bb7cba6f7f4f85326b3
+- git fetch && git fetch --tags
+- git checkout 4.0.6
 - make
 - cd ..
 - git clone --depth 1 https://github.com/RedisLabsModules/RediSearch.git
-- cd RediSearch/src
+- cd RediSearch
+- git fetch && git fetch --tags
+- git checkout v1.0.4
 - make all
-- ls -la *.so
 - cd ..
+
