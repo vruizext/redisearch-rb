@@ -10,6 +10,7 @@ class RediSearchTest < Minitest::Test
     @redisearch_client = RediSearch.new('test_idx', @redis_client)
     @schema = ['title', 'TEXT', 'WEIGHT', '2.0',
                'director', 'TEXT', 'WEIGHT', '1.0',
+               'genre', 'TAG',
                'year', 'NUMERIC', 'SORTABLE']
 
   end
@@ -165,5 +166,19 @@ class RediSearchTest < Minitest::Test
     assert_equal 1, info['num_docs'].to_i
     assert_equal 1, info['max_doc_id'].to_i
     assert_equal 5, info['num_terms'].to_i
+  end
+
+  def test_delete_by_id
+    assert(@redisearch_client.create_index(@schema))
+    docs = [['id_1', ['title', 'Lost in translation', 'director', 'Sofia Coppola', 'year', '2004']],
+            ['id_2', ['title', 'Ex Machina', 'director', 'Alex Garland', 'year', '2014']],
+            ['id_3', ['title', 'Terminator', 'director', 'James Cameron', 'year', '1984']],
+            ['id_4', ['title', 'Blade Runner', 'director', 'Ridley Scott', 'year', '1982']]]
+    assert(@redisearch_client.add_docs(docs))
+    assert_equal(1, @redisearch_client.delete_by_id('id_1'))
+    assert_empty(@redisearch_client.search('@title:lost'))
+    assert(@redisearch_client.get_by_id('id_1').any?)
+    assert(@redis_client.del('id_1'))
+    assert(@redisearch_client.get_by_id('id_1').empty?)
   end
 end

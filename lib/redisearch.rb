@@ -12,12 +12,13 @@ class RediSearch
   #
   # { verbatim: true, withscores: true, withsortkey: false }
 
-  CREATE_OPTIONS_FLAGS = [:nooffsets, :nofreqs, :noscoreidx, :nofields]
-  ADD_OPTIONS_FLAGS = [:nosave, :replace]
+  CREATE_OPTIONS_FLAGS = [:nooffsets, :nofreqs, :nohl, :nofields]
+  ADD_OPTIONS_FLAGS = [:nosave, :replace, :partial]
   SEARCH_OPTIONS_FLAGS = [:nocontent, :verbatim, :nostopwords,  :withscores, :withsortkeys]
 
   # Params options need an array with the values for the option
   #  { limit: ['0', '50'], sortby: ['year', 'desc'], return: ['2', 'title', 'year'] }
+  CREATE_OPTIONS_PARAMS = [:stopwords]
   ADD_OPTIONS_PARAMS = [:language]
   SEARCH_OPTIONS_PARAMS = [:filter, :return, :infields, :inkeys, :slop, :scorer, :sortby, :limit]
 
@@ -36,11 +37,11 @@ class RediSearch
 
   # Create new index with the given `schema`
   # @param [Array] schema
-  #
+  # @param [Hash] opts options
   # Example:
   #
   #   redisearch = RediSearch.new('my_idx')
-  #   redisearch.create_idx(['title', 'TEXT', 'WEIGHT', '2.0', 'director', 'TEXT', 'WEIGHT', '1.0'])
+  #   redisearch.create_idx(['title', 'TEXT', 'WEIGHT', '2.0', 'director', 'TEXT', 'WEIGHT', '1.0', 'year', 'NUMERIC', 'SORTABLE'])
   #
   # See http://redisearch.io/Commands/#ftcreate
   #
@@ -87,22 +88,25 @@ class RediSearch
   # See http://redisearch.io/Commands/#ftadd
   # @return [String] "OK" on success
   def add_docs(docs, opts = {})
-    multi { docs.each { |doc_id, fields| @redis.call(ft_add(doc_id, fields, opts)) } }
+    docs.each { |doc_id, fields| call(ft_add(doc_id, fields, opts))}
   end
 
   # Search the index with the given `query`
   # @param [String] query text query, see syntax here http://redisearch.io/Query_Syntax/
   # @param [Hash] opts options for the query
   #
-  #@return [Array] documents matching the query
+  # @return [Array] documents matching the query
   def search(query, opts = {})
-    results_to_hash(call(ft_search(query, opts)), opts)
+    build_docs(call(ft_search(query, opts)), opts)
   end
 
   # Fetch a document by id
-  def get_by_id(id)
-    Hash[with_reconnect { @redis.hgetall(id) } || []]
-      .tap { |doc| doc['id'] = id unless doc.empty? }
+  #
+  # @param [String] doc_id id assigned to the document
+  # @return [Hash] Hash containing document
+  def get_by_id(doc_id)
+    Hash[*call(ft_get(doc_id))]
+      .tap { |doc| doc['id'] = doc_id unless doc.empty? } || {}
   end
 
   # Return information and statistics on the index.
@@ -110,6 +114,36 @@ class RediSearch
   #
   def info
     Hash[*call(ft_info)]
+  end
+
+  # Deletes a document from the index
+  #
+  # See http://redisearch.io/Commands/#ftdel
+  #
+  # @param [String] doc_id id assigned to the document
+  # @return [int] 1 if the document was in the index, or 0 if not.
+  def delete_by_id(doc_id)
+    call(ft_del(doc_id))
+  end
+
+  # Deletes all documents returned by the query
+  #
+  # @param [String] query in the same format as used in `search`
+  # @param [Hash] opts options for the query, same  as in `search`
+  # @return [int] count of documents deleted
+  def delete_by_query(query, opts = {})
+    call(ft_search(query, opts.merge(nocontent: true)))[1..-1].map do |doc_id|
+      call(ft_del(doc_id))
+    end.sum
+  end
+
+  # Execute arbitrary command. Only RediSearch commands are allowed
+  #
+  # @param [Array] command
+  # @return [mixed] The output returned by redis
+  def call(command)
+    raise ArgumentError.new("#{command&.first} is not a RediSearch command") unless valid_command?(command)
+    @redis.with_reconnect { @redis.call(command.flatten) }
   end
 
   private
@@ -120,10 +154,6 @@ class RediSearch
 
   def multi
     @redis.with_reconnect { @redis.multi { yield } }
-  end
-
-  def call(command)
-    @redis.with_reconnect { @redis.call(command) }
   end
 
   def add(doc_id, fields)
@@ -146,8 +176,24 @@ class RediSearch
     ['FT.ADD', @idx_name , doc_id, weight || DEFAULT_WEIGHT, *add_options(opts), 'FIELDS', *fields]
   end
 
+  def ft_add_hash(doc_id, opts = {}, weight =  nil)
+    ['FT.ADDHASH', @idx_name , doc_id, weight || DEFAULT_WEIGHT, *add_options(opts)]
+  end
+
   def ft_search(query, opts)
     ['FT.SEARCH', @idx_name, *query, *search_options(opts)].flatten
+  end
+
+  def ft_get(doc_id)
+    ['FT.GET', @idx_name , doc_id]
+  end
+
+  def ft_mget(doc_ids)
+    ['FT.MGET', @idx_name , *doc_ids]
+  end
+
+  def ft_del(doc_id)
+    ['FT.DEL', @idx_name , doc_id]
   end
 
   def create_options(opts = {})
@@ -166,22 +212,27 @@ class RediSearch
     flags_keys.map do |key|
       key.to_s.upcase if opts[key]
     end.compact +
-    params_keys.map do |key|
-      [key.to_s.upcase, *opts[key]] unless opts[key].nil?
-    end.compact
+      params_keys.map do |key|
+        [key.to_s.upcase, *opts[key]] unless opts[key].nil?
+      end.compact
   end
 
-  def results_to_hash(results, opts = {})
+  def build_docs(results, opts = {})
     return {} if results.nil? || results[0] == 0
     results.shift
-    offset = opts[:withscores] ? 1 : 0
-    rows_per_doc = 2 + offset
-    nr_of_docs = results.size / (2 + offset)
+    score_offset = opts[:withscores] ? 1 : 0
+    content_offset = score_offset + 1
+    rows_per_doc = 1 + content_offset
+    nr_of_docs = results.size / rows_per_doc
     (0..nr_of_docs-1).map do |n|
-      doc = Hash[*results[rows_per_doc * n + 1 + offset]]
-      doc['score'] = results[rows_per_doc * n + offset] if offset > 0
+      doc = opts[:nocontent] ? {} : Hash[*results[rows_per_doc * n + content_offset]]
+      doc['score'] = results[rows_per_doc * n + score_offset] if opts[:withscores]
       doc['id'] = results[rows_per_doc * n]
       doc
     end
+  end
+
+  def valid_command?(command)
+    command[0] =~ /^ft\./i
   end
 end
