@@ -14,13 +14,13 @@ class RediSearch
 
   CREATE_OPTIONS_FLAGS = [:nooffsets, :nofreqs, :nohl, :nofields]
   ADD_OPTIONS_FLAGS = [:nosave, :replace, :partial]
-  SEARCH_OPTIONS_FLAGS = [:nocontent, :verbatim, :nostopwords,  :withscores, :withsortkeys]
+  SEARCH_OPTIONS_FLAGS = [:nocontent, :verbatim, :nostopwords, :withscores, :withsortkeys]
 
   # Params options need an array with the values for the option
   #  { limit: ['0', '50'], sortby: ['year', 'desc'], return: ['2', 'title', 'year'] }
   CREATE_OPTIONS_PARAMS = [:stopwords]
-  ADD_OPTIONS_PARAMS = [:language]
-  SEARCH_OPTIONS_PARAMS = [:filter, :return, :infields, :inkeys, :slop, :scorer, :sortby, :limit]
+  ADD_OPTIONS_PARAMS = [:language, :payload]
+  SEARCH_OPTIONS_PARAMS = [:filter, :return, :infields, :inkeys, :slop, :scorer, :sortby, :limit, :payload]
 
   # Create RediSearch client instance
   #
@@ -123,10 +123,10 @@ class RediSearch
   # @param [String] doc_id id assigned to the document
   # @return [int] 1 if the document was in the index, or 0 if not.
   def delete_by_id(doc_id)
-    call(ft_del(doc_id))
+    @redis.del(doc_id) if call(ft_del(doc_id))
   end
 
-  # Deletes all documents returned by the query
+  # Deletes all documents matching the query
   #
   # @param [String] query in the same format as used in `search`
   # @param [Hash] opts options for the query, same  as in `search`
@@ -137,7 +137,8 @@ class RediSearch
     end.sum
   end
 
-  # Execute arbitrary command. Only RediSearch commands are allowed
+  # Execute arbitrary command in redisearch index
+  # Only RediSearch commands are allowed
   #
   # @param [Array] command
   # @return [mixed] The output returned by redis
@@ -210,10 +211,10 @@ class RediSearch
 
   def build_options(opts, flags_keys, params_keys)
     flags_keys.map do |key|
-      key.to_s.upcase if opts[key]
+      key.to_s.upcase if opts[key.to_s]
     end.compact +
       params_keys.map do |key|
-        [key.to_s.upcase, *opts[key]] unless opts[key].nil?
+        [key.to_s.upcase, *opts[key.to_s]] unless opts[key.to_s].nil?
       end.compact
   end
 
@@ -221,11 +222,11 @@ class RediSearch
     return {} if results.nil? || results[0] == 0
     results.shift
     score_offset = opts[:withscores] ? 1 : 0
-    content_offset = score_offset + 1
-    rows_per_doc = 1 + content_offset
+    content_offset = opts[:nocontent] ? 0 : 1
+    rows_per_doc = 1 + content_offset + score_offset
     nr_of_docs = results.size / rows_per_doc
     (0..nr_of_docs-1).map do |n|
-      doc = opts[:nocontent] ? {} : Hash[*results[rows_per_doc * n + content_offset]]
+      doc = opts[:nocontent] ? {} : Hash[*results[rows_per_doc * n + content_offset + score_offset]]
       doc['score'] = results[rows_per_doc * n + score_offset] if opts[:withscores]
       doc['id'] = results[rows_per_doc * n]
       doc
