@@ -13,19 +13,22 @@ class RediSearch
   # { verbatim: true, withscores: true, withsortkey: false }
 
   OPTIONS_FLAGS = {
-    create: [:nooffsets, :nofreqs, :nohl, :nofields],
     add: [:nosave, :replace, :partial],
-    drop: [:keepdocs],
+    create: [:nooffsets, :nofreqs, :nohl, :nofields],
     del: [:dd],
-    search: [:nocontent, :verbatim, :nostopwords, :withscores, :withsortkeys]
+    drop: [:keepdocs],
+    search: [:nocontent, :verbatim, :nostopwords, :withscores, :withsortkeys],
+    sugadd: [:incr],
+    sugget: [:fuzzy, :withscores],
   }
 
   # Params options need an array with the values for the option
   #  { limit: ['0', '50'], sortby: ['year', 'desc'], return: ['2', 'title', 'year'] }
   OPTIONS_PARAMS = {
-    create: [:stopwords],
     add: [:language, :payload],
-    search: [:filter, :return, :infields, :inkeys, :slop, :scorer, :sortby, :limit, :payload]
+    create: [:stopwords],
+    search: [:filter, :return, :infields, :inkeys, :slop, :scorer, :sortby, :limit, :payload],
+    sugget: [:max],
   }
 
   # Create RediSearch client instance
@@ -143,13 +146,60 @@ class RediSearch
     end.sum
   end
 
+  # Adds a string to an auto-complete suggestion dictionary.
+  #
+  # See https://oss.redislabs.com/redisearch/Commands/#ftsugadd
+  #
+  # @param [String] dict_name the key used to store the dictionary
+  # @param [String] content the string that is going to be indexed
+  # @param [Hash] opts optional parameters
+  # @return [int] current size of the dictionary
+  def autocomplete_add(dict_name, content, score = 1.0, opts = {})
+    call(ft_sugadd(dict_name, content, score, opts))
+  end
+
+  # Gets completion suggestions for a prefix.
+  #
+  # See https://oss.redislabs.com/redisearch/Commands/#ftsugadd
+  #
+  # @param [String] dict_name the key used to store the dictionary
+  # @param [String] prefix the prefix to search / complete
+  # @param [Hash] opts optional parameters
+  # @return [Array] a list of the top suggestions matching the prefix,
+  # optionally with score after each entry
+  def autocomplete_get(dict_name, prefix, opts = {})
+    call(ft_sugget(dict_name, prefix, opts))
+  end
+
+  # Deletes a string from an auto-complete suggestion dictionary.
+  #
+  # See https://oss.redislabs.com/redisearch/Commands/#ftsugdel
+  #
+  # @param [String] dict_name the key used to store the dictionary
+  # @param [String] content the string that is going to be deleted
+  # @param [Hash] opts optional parameters
+  # @return [int] 1 if the string was found and deleted, 0 otherwise
+  def autocomplete_del(dict_name, content)
+    call(ft_sugdel(dict_name, content))
+  end
+
+  # Gets the current size of an auto-complete suggestion dictionary.
+  #
+  # See https://oss.redislabs.com/redisearch/Commands/#ftsugdel
+  #
+  # @param [String] dict_name the key used to store the dictionary
+  # @return [int] current size of the dictionary
+  def autocomplete_len(dict_name)
+    call(ft_suglen(dict_name))
+  end
+
   # Execute arbitrary command in redisearch index
   # Only RediSearch commands are allowed
   #
   # @param [Array] command
   # @return [mixed] The output returned by redis
   def call(command)
-    raise ArgumentError.new("unknown/unsupported command '#{command&.first}'") unless valid_command?(command)
+    raise ArgumentError.new("unknown/unsupported command '#{command.first}'") unless valid_command?(command.first)
     @redis.with_reconnect { @redis.call(command.flatten) }
   end
 
@@ -203,6 +253,30 @@ class RediSearch
     ['FT.DEL', @idx_name , doc_id, *serialize_options(opts, :del)]
   end
 
+  def ft_tagvals(field_name)
+    ['FT.TAGVALS', @idx_name , field_name]
+  end
+
+  def ft_explain(query, opts)
+    ['FT.EXPLAIN', @idx_name, *query, *serialize_options(opts, :search)].flatten
+  end
+
+  def ft_sugadd(dict_name, content, score, opts)
+    ['FT.SUGADD', dict_name , content, score, *serialize_options(opts, :sugadd)]
+  end
+
+  def ft_sugdel(dict_name, content)
+    ['FT.SUGDEL', dict_name , content]
+  end
+
+  def ft_suglen(dict_name)
+    ['FT.SUGLEN', dict_name]
+  end
+
+  def ft_sugget(dict_name, prefix,opts)
+    ['FT.SUGGET', dict_name , prefix, *serialize_options(opts, :sugget)]
+  end
+
   def serialize_options(opts, method)
      [flags_for_method(opts, method), params_for_method(opts, method)].flatten.compact
   end
@@ -237,6 +311,6 @@ class RediSearch
   def valid_command?(command)
     %w(FT.CREATE FT.ADD FT.ADDHASH FT.SEARCH FT.DEL FT.DROP FT.GET FT.MGET
        FT.SUGADD FT.SUGGET FT.SUGDEL FT.SUGLEN FT.SYNADD FT.SYNUPDATE FT.SYNDUMP
-       FT.INFO FT.AGGREGAGE FT.EXPLAIN FT.TAGVALS).include?(command)
+       FT.INFO FT.AGGREGATE FT.EXPLAIN FT.TAGVALS).include?(command)
   end
 end

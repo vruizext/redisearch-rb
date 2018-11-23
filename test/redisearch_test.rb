@@ -41,7 +41,7 @@ class RediSearchTest < Minitest::Test
     @redisearch_client.add_doc('id_1', doc)
     @redisearch_client.drop_index
     assert_raises(Redis::CommandError) { @redisearch_client.info }
-    assert(@redisearch_client.get_by_id('id_1').empty?)
+    assert(@redis_client.hgetall('id_1').empty?)
   end
 
   def test_drop_idx_keep_documents
@@ -193,5 +193,21 @@ class RediSearchTest < Minitest::Test
     assert(@redisearch_client.get_by_id('id_2').empty?)
     assert(@redis_client.del('id_1'))
     assert(@redisearch_client.get_by_id('id_1').empty?)
+  end
+
+  def test_auto_complete_suggestions
+    dict_name = 'test_suggestions'
+    @redisearch_client.autocomplete_add(dict_name, 'foobar', 2.0)
+    @redisearch_client.autocomplete_add(dict_name, 'foowoz', 1.0)
+    @redisearch_client.autocomplete_add(dict_name, 'foomeh', 0.85)
+    @redisearch_client.autocomplete_add(dict_name, 'woowoz', 1.0)
+    assert_equal(4, @redisearch_client.autocomplete_len(dict_name))
+    results = @redisearch_client.autocomplete_get(dict_name, 'foo')
+    assert_equal(3, results.count)
+    assert_equal('foobar', results.first)
+    assert_equal(4, @redisearch_client.autocomplete_get(dict_name, 'foo', { fuzzy: true }).count)
+    assert @redisearch_client.autocomplete_del(dict_name, 'foobar').to_i > 0
+    refute @redisearch_client.autocomplete_del(dict_name, 'foozzz').to_i > 0
+    assert_equal('foowoz', @redisearch_client.autocomplete_get(dict_name, 'foo').first)
   end
 end
