@@ -12,15 +12,21 @@ class RediSearch
   #
   # { verbatim: true, withscores: true, withsortkey: false }
 
-  CREATE_OPTIONS_FLAGS = [:nooffsets, :nofreqs, :nohl, :nofields]
-  ADD_OPTIONS_FLAGS = [:nosave, :replace, :partial]
-  SEARCH_OPTIONS_FLAGS = [:nocontent, :verbatim, :nostopwords, :withscores, :withsortkeys]
+  OPTIONS_FLAGS = {
+    create: [:nooffsets, :nofreqs, :nohl, :nofields],
+    add: [:nosave, :replace, :partial],
+    drop: [:keepdocs],
+    del: [:dd],
+    search: [:nocontent, :verbatim, :nostopwords, :withscores, :withsortkeys]
+  }
 
   # Params options need an array with the values for the option
   #  { limit: ['0', '50'], sortby: ['year', 'desc'], return: ['2', 'title', 'year'] }
-  CREATE_OPTIONS_PARAMS = [:stopwords]
-  ADD_OPTIONS_PARAMS = [:language, :payload]
-  SEARCH_OPTIONS_PARAMS = [:filter, :return, :infields, :inkeys, :slop, :scorer, :sortby, :limit, :payload]
+  OPTIONS_PARAMS = {
+    create: [:stopwords],
+    add: [:language, :payload],
+    search: [:filter, :return, :infields, :inkeys, :slop, :scorer, :sortby, :limit, :payload]
+  }
 
   # Create RediSearch client instance
   #
@@ -54,8 +60,8 @@ class RediSearch
   #
   # See http://redisearch.io/Commands/#ftdrop
   # @return [String] "OK" on success
-  def drop_index
-    call(ft_drop)
+  def drop_index(opts = {})
+    call(ft_drop(opts))
   end
 
   # Add a single doc to the index, with the given `doc_id` and `fields`
@@ -122,8 +128,8 @@ class RediSearch
   #
   # @param [String] doc_id id assigned to the document
   # @return [int] 1 if the document was in the index, or 0 if not.
-  def delete_by_id(doc_id)
-    @redis.del(doc_id) if call(ft_del(doc_id))
+  def delete_by_id(doc_id, opts = {})
+    call(ft_del(doc_id, opts))
   end
 
   # Deletes all documents matching the query
@@ -133,7 +139,7 @@ class RediSearch
   # @return [int] count of documents deleted
   def delete_by_query(query, opts = {})
     call(ft_search(query, opts.merge(nocontent: true)))[1..-1].map do |doc_id|
-      call(ft_del(doc_id))
+      call(ft_del(doc_id, opts))
     end.sum
   end
 
@@ -143,7 +149,7 @@ class RediSearch
   # @param [Array] command
   # @return [mixed] The output returned by redis
   def call(command)
-    raise ArgumentError.new("#{command&.first} is not a RediSearch command") unless valid_command?(command)
+    raise ArgumentError.new("unknown/unsupported command '#{command&.first}'") unless valid_command?(command)
     @redis.with_reconnect { @redis.call(command.flatten) }
   end
 
@@ -162,11 +168,11 @@ class RediSearch
   end
 
   def ft_create(schema, opts)
-    ['FT.CREATE', @idx_name , *create_options(opts), 'SCHEMA', *schema]
+    ['FT.CREATE', @idx_name , *serialize_options(opts, :create), 'SCHEMA', *schema]
   end
 
-  def ft_drop
-    ['FT.DROP', @idx_name]
+  def ft_drop(opts)
+    ['FT.DROP', @idx_name, *serialize_options(opts, :drop)]
   end
 
   def ft_info
@@ -174,15 +180,15 @@ class RediSearch
   end
 
   def ft_add(doc_id, fields, opts = {}, weight =  nil)
-    ['FT.ADD', @idx_name , doc_id, weight || DEFAULT_WEIGHT, *add_options(opts), 'FIELDS', *fields]
+    ['FT.ADD', @idx_name , doc_id, weight || DEFAULT_WEIGHT, *serialize_options(opts, :add), 'FIELDS', *fields]
   end
 
   def ft_add_hash(doc_id, opts = {}, weight =  nil)
-    ['FT.ADDHASH', @idx_name , doc_id, weight || DEFAULT_WEIGHT, *add_options(opts)]
+    ['FT.ADDHASH', @idx_name , doc_id, weight || DEFAULT_WEIGHT, *serialize_options(opts, :add)]
   end
 
   def ft_search(query, opts)
-    ['FT.SEARCH', @idx_name, *query, *search_options(opts)].flatten
+    ['FT.SEARCH', @idx_name, *query, *serialize_options(opts, :search)].flatten
   end
 
   def ft_get(doc_id)
@@ -193,29 +199,24 @@ class RediSearch
     ['FT.MGET', @idx_name , *doc_ids]
   end
 
-  def ft_del(doc_id)
-    ['FT.DEL', @idx_name , doc_id]
+  def ft_del(doc_id, opts)
+    ['FT.DEL', @idx_name , doc_id, *serialize_options(opts, :del)]
   end
 
-  def create_options(opts = {})
-    build_options(opts, CREATE_OPTIONS_FLAGS, [])
+  def serialize_options(opts, method)
+     [flags_for_method(opts, method), params_for_method(opts, method)].flatten.compact
   end
 
-  def add_options(opts = {})
-    build_options(opts, ADD_OPTIONS_FLAGS, ADD_OPTIONS_PARAMS)
+  def flags_for_method(opts, method)
+    OPTIONS_FLAGS[method].to_a.map do |key|
+      key.to_s.upcase if opts[key]
+    end.compact
   end
 
-  def search_options(opts = {})
-    build_options(opts, SEARCH_OPTIONS_FLAGS, SEARCH_OPTIONS_PARAMS)
-  end
-
-  def build_options(opts, flags_keys, params_keys)
-    flags_keys.map do |key|
-      key.to_s.upcase if opts[key.to_s]
-    end.compact +
-      params_keys.map do |key|
-        [key.to_s.upcase, *opts[key.to_s]] unless opts[key.to_s].nil?
-      end.compact
+  def params_for_method(opts, method)
+    OPTIONS_PARAMS[method].to_a.map do |key|
+      [key.to_s.upcase, *opts[key]] unless opts[key].nil?
+    end.compact
   end
 
   def build_docs(results, opts = {})
@@ -234,6 +235,8 @@ class RediSearch
   end
 
   def valid_command?(command)
-    command[0] =~ /^ft\./i
+    %w(FT.CREATE FT.ADD FT.ADDHASH FT.SEARCH FT.DEL FT.DROP FT.GET FT.MGET
+       FT.SUGADD FT.SUGGET FT.SUGDEL FT.SUGLEN FT.SYNADD FT.SYNUPDATE FT.SYNDUMP
+       FT.INFO FT.AGGREGAGE FT.EXPLAIN FT.TAGVALS).include?(command)
   end
 end

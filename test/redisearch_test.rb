@@ -37,8 +37,19 @@ class RediSearchTest < Minitest::Test
 
   def test_drop_idx
     assert(@redisearch_client.create_index(@schema))
-    assert(@redisearch_client.drop_index)
+    doc = ['title', 'Lost in translation', 'director', 'Sofia Coppola', 'year', '2004']
+    @redisearch_client.add_doc('id_1', doc)
+    @redisearch_client.drop_index
     assert_raises(Redis::CommandError) { @redisearch_client.info }
+    assert(@redisearch_client.get_by_id('id_1').empty?)
+  end
+
+  def test_drop_idx_keep_documents
+    @redisearch_client.create_index(@schema)
+    doc = ['title', 'Lost in translation', 'director', 'Sofia Coppola', 'year', '2004']
+    @redisearch_client.add_doc('id_1', doc)
+    @redisearch_client.drop_index({ keepdocs: true })
+    assert(@redis_client.hgetall('id_1').any?)
   end
 
   def test_add_doc
@@ -175,9 +186,11 @@ class RediSearchTest < Minitest::Test
             ['id_3', ['title', 'Terminator', 'director', 'James Cameron', 'year', '1984']],
             ['id_4', ['title', 'Blade Runner', 'director', 'Ridley Scott', 'year', '1982']]]
     assert(@redisearch_client.add_docs(docs))
-    assert_equal(1, @redisearch_client.delete_by_id('id_1'))
+    assert_equal(1, @redisearch_client.delete_by_id('id_1', { dd: false }))
+    assert_equal(1, @redisearch_client.delete_by_id('id_2', { dd: true }))
     assert_empty(@redisearch_client.search('@title:lost'))
     assert(@redisearch_client.get_by_id('id_1').any?)
+    assert(@redisearch_client.get_by_id('id_2').empty?)
     assert(@redis_client.del('id_1'))
     assert(@redisearch_client.get_by_id('id_1').empty?)
   end
