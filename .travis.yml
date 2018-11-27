@@ -14,7 +14,7 @@ before_install:
 - git clone --depth 1 https://github.com/RedisLabsModules/RediSearch.git
 - cd RediSearch
 - git fetch && git fetch --tags
-- git checkout v1.0.4
+- git checkout v1.2.0
 - make all
 - cd ..
 
