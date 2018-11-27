@@ -43,7 +43,7 @@ In order to run the tests, it's necessary to set some env variables (see .env.ex
 ```ruby
 require 'redisearch-rb'
 
-redis = Redis.new(REDIS_URL)
+redis = Redis.new(url: REDIS_URL)
 redisearch_client = RediSearch.new('test_idx', redis)
 
 schema = ['title', 'TEXT', 'WEIGHT', '2.0',
