@@ -294,7 +294,7 @@ class RediSearch
   end
 
   def build_docs(results, opts = {})
-    return {} if results.nil? || results[0] == 0
+    return [] if results.nil? || results[0] == 0
     results.shift
     score_offset = opts[:withscores] ? 1 : 0
     content_offset = opts[:nocontent] ? 0 : 1

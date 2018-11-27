@@ -104,6 +104,7 @@ class RediSearchTest < Minitest::Test
     assert matches.any? { |doc| 'Lost in translation' == doc['title'] }
     assert matches.any? { |doc| 'Ex Machina' == doc['title'] }
     matches.each { |doc| assert doc['score'].to_i > 0 }
+    assert_equal([], @redisearch_client.search('foobarwozzz'))
   end
 
   def test_search_field_selector
