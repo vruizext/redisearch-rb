@@ -11,7 +11,7 @@ http://redisearch.io/
 First of all, you need to install RediSearch, if you haven't yet:
 
 1. Install Redis 4.0.1 or highger https://github.com/antirez/redis/releases/tag/4.0.1
-2. Install RediSearch 1.0.4 or higher http://redisearch.io/Quick_Start/
+2. Install RediSearch 1.2.0 or higher http://redisearch.io/Quick_Start/
 3. Edit your `redis.conf` file and add a `loadmodule` directive to load the RediSearch module built in the step 2.
 
 To install this gem, add this line to your application's Gemfile:
