@@ -84,6 +84,14 @@ class RediSearchTest < Minitest::Test
     assert_includes(search_result.to_s, 'Ex Machina')
   end
 
+  def test_add_hash
+    assert(@redisearch_client.create_index(@schema))
+    doc = ['title', 'Lost in translation', 'director', 'Sofia Coppola', 'year', '2004']
+    @redis_client.hmset('id_1', *doc)
+    assert(@redisearch_client.add_hash('id_1'))
+    assert_includes(@redis_client.call(['FT.SEARCH', 'test_idx', '@title:lost']).to_s, 'Lost in translation')
+  end
+
   def test_get_by_id
     assert(@redisearch_client.create_index(@schema))
     docs = [['id_1', ['title', 'Lost in translation', 'director', 'Sofia Coppola', 'year', '2004']],
@@ -92,6 +100,18 @@ class RediSearchTest < Minitest::Test
     doc = @redisearch_client.get_by_id('id_1')
     assert_equal('id_1', doc['id'])
     assert_equal('Lost in translation', doc['title'])
+  end
+
+  def test_get_by_ids
+    assert(@redisearch_client.create_index(@schema))
+    docs = [['id_1', ['title', 'Lost in translation', 'director', 'Sofia Coppola', 'year', '2004']],
+            ['id_2', ['title', 'Ex Machina', 'director', 'Alex Garland', 'year', '2014']]]
+    assert(@redisearch_client.add_docs(docs))
+    docs = @redisearch_client.get_by_ids(['id_1', 'id_2'])
+    assert_equal('id_1', docs[0]['id'])
+    assert_equal('Lost in translation', docs[0]['title'])
+    assert_equal('id_2', docs[1]['id'])
+    assert_equal('Ex Machina', docs[1]['title'])
   end
 
   def test_search_simple_query

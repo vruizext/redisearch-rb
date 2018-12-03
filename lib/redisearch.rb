@@ -14,6 +14,7 @@ class RediSearch
 
   OPTIONS_FLAGS = {
     add: [:nosave, :replace, :partial],
+    addhash: [:replace],
     create: [:nooffsets, :nofreqs, :nohl, :nofields],
     del: [:dd],
     drop: [:keepdocs],
@@ -26,6 +27,7 @@ class RediSearch
   #  { limit: ['0', '50'], sortby: ['year', 'desc'], return: ['2', 'title', 'year'] }
   OPTIONS_PARAMS = {
     add: [:language, :payload],
+    addhash: [:language],
     create: [:stopwords],
     search: [:filter, :return, :infields, :inkeys, :slop, :scorer, :sortby, :limit, :payload],
     sugget: [:max],
@@ -71,6 +73,7 @@ class RediSearch
   #
   # @param [String] doc_id id assigned to the document
   # @param [Array] fields name-value pairs to be indexed
+  # @param [Float] weight asigned by the user to the document
   # @param [Hash] opts optional parameters
   # Example:
   #
@@ -79,8 +82,8 @@ class RediSearch
   #
   # See http://redisearch.io/Commands/#ftadd
   # @return [String] "OK" on success
-  def add_doc(doc_id, fields, opts = {})
-    call(ft_add(doc_id, fields, opts))
+  def add_doc(doc_id, fields, opts = {}, weight = nil)
+    call(ft_add(doc_id, fields, opts, weight))
   end
 
   # Add a set of docs to the index. Uses redis `multi` to make a single bulk insert.
@@ -90,14 +93,30 @@ class RediSearch
   # Example:
   #
   #   redisearch = RediSearch.new('my_idx')
-  #   docs = [['id_1', ['title', 'Lost in translation', 'director', 'Sofia Coppola'],
-  #           ['id_2', ['title', 'Ex Machina', 'director', 'Alex Garland']]
+  #   docs = [['id_1', ['title', 'Lost in translation', 'director', 'Sofia Coppola'], 0.75],
+  #           ['id_2', ['title', 'Ex Machina', 'director', 'Alex Garland'], 0.95]
   #   redisearch.add_docs(docs)
   #
   # See http://redisearch.io/Commands/#ftadd
   # @return [String] "OK" on success
   def add_docs(docs, opts = {})
-    docs.each { |doc_id, fields| call(ft_add(doc_id, fields, opts))}
+    docs.map { |doc_id, fields, weight| call(ft_add(doc_id, fields, opts, weight))}
+  end
+
+  # Adds a document to the index from an existing HASH key `doc_id` in Redis.
+  #
+  # @param [String] doc_id HASH key holding the fields that need to be indexed
+  # @param [Hash] opts optional parameters
+  # @param [Float]weight asigned by the user to the document
+  # Example:
+  #
+  #   redisearch = RediSearch.new('my_idx')
+  #   redisearch.add_hash('id_1', { weight: true })
+  #
+  # See http://redisearch.io/Commands/#ftadd
+  # @return [String] "OK" on success
+  def add_hash(doc_id, opts = {}, weight = nil)
+    call(ft_addhash(doc_id, opts, weight))
   end
 
   # Search the index with the given `query`
@@ -107,6 +126,16 @@ class RediSearch
   # @return [Array] documents matching the query
   def search(query, opts = {})
     build_docs(call(ft_search(query, opts)), opts)
+  end
+
+  # Fetch the contents of multiple documents
+  #
+  # @param [Array] doc_ids ids assigned to the document
+  # @return [Array] documents found for the ids given
+  def get_by_ids(doc_ids)
+    call(ft_mget(doc_ids)).map.with_index do |doc, i|
+      { 'id' => doc_ids[i] }.merge(Hash[*doc]) unless doc.empty?
+    end.compact
   end
 
   # Fetch a document by id
@@ -233,7 +262,7 @@ class RediSearch
     ['FT.ADD', @idx_name , doc_id, weight || DEFAULT_WEIGHT, *serialize_options(opts, :add), 'FIELDS', *fields]
   end
 
-  def ft_add_hash(doc_id, opts = {}, weight =  nil)
+  def ft_addhash(doc_id, opts = {}, weight =  nil)
     ['FT.ADDHASH', @idx_name , doc_id, weight || DEFAULT_WEIGHT, *serialize_options(opts, :add)]
   end
 
