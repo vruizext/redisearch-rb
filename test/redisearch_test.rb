@@ -189,6 +189,40 @@ class RediSearchTest < Minitest::Test
     assert_equal 'id_2', matches[0]['id']
   end
 
+  def test_search_summarize
+    assert(@redisearch_client.create_index(@schema))
+    long_director = 'Steven ' * 80 + 'Sofia Coppola' + ' ' + 'Steven ' * 80
+    docs = [['id_1', ['title', 'Lost in translation', 'director',  long_director, 'year', '2004']],
+            ['id_2', ['title', 'Ex Machina', 'director', 'Alex Garland', 'year', '2014']],
+            ['id_3', ['title', 'Terminator', 'director', 'James Cameron', 'year', '1984']],
+            ['id_4', ['title', 'Blade Runner', 'director', 'Ridley Scott', 'year', '1982']]]
+    assert(@redisearch_client.add_docs(docs))
+    matches = @redisearch_client.search('Sofia', summarize: false)
+    assert_equal 1, matches.count
+    assert_equal long_director.size, matches[0]['director'].size
+
+    matches = @redisearch_client.search('Sofia', summarize: true)
+    assert_equal 1, matches.count
+    assert_in_epsilon 122, matches[0]['director'].size, 20
+  end
+
+  def test_search_highlight
+    assert(@redisearch_client.create_index(@schema))
+    long_director = 'Steven ' * 80 + 'Sofia Coppola' + ' ' + 'Steven ' * 80
+    docs = [['id_1', ['title', 'Lost in translation', 'director',  long_director, 'year', '2004']],
+            ['id_2', ['title', 'Ex Machina', 'director', 'Alex Garland', 'year', '2014']],
+            ['id_3', ['title', 'Terminator', 'director', 'James Cameron', 'year', '1984']],
+            ['id_4', ['title', 'Blade Runner', 'director', 'Ridley Scott', 'year', '1982']]]
+    assert(@redisearch_client.add_docs(docs))
+    matches = @redisearch_client.search('Sofia', highlight: false)
+    assert_equal 1, matches.count
+    assert_match(/^[^<]+$/, matches[0]['director'])
+
+    matches = @redisearch_client.search('Sofia', highlight: true)
+    assert_equal 1, matches.count
+    assert_match(/<b>/, matches[0]['director'])
+  end
+
   def test_index_info
     assert(@redisearch_client.create_index(@schema))
     doc = ['id_1', ['title', 'Lost in translation', 'director', 'Sofia Coppola', 'year', '2004']]
