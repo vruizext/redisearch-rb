@@ -18,7 +18,7 @@ class RediSearch
     create: [:nooffsets, :nofreqs, :nohl, :nofields],
     del: [:dd],
     drop: [:keepdocs],
-    search: [:nocontent, :verbatim, :nostopwords, :withscores, :withsortkeys],
+    search: [:nocontent, :verbatim, :nostopwords, :withscores, :withsortkeys, :highlight, :summarize],
     sugadd: [:incr],
     sugget: [:fuzzy, :withscores],
   }
