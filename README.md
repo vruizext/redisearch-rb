@@ -1,4 +1,5 @@
-[![Gem Version](https://badge.fury.io/rb/redisearch-rb.svg)](https://badge.fury.io/rb/redisearch-rb) ![travis-ci](https://travis-ci.org/vruizext/redisearch-rb.svg?branch=master)
+[![Gem Version](https://badge.fury.io/rb/redisearch-rb.svg)](https://badge.fury.io/rb/redisearch-rb) 
+[![travis-ci](https://travis-ci.org/vruizext/redisearch-rb.svg?branch=master)](https://travis-ci.org/vruizext/redisearch-rb)
 
 # redisearch-rb
 
